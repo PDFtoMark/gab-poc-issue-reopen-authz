@@ -1,0 +1,59 @@
+name: PoC reopen authz
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: poc-issue-comment-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  reopen-issue:
+    if: |
+      github.event.issue.pull_request == null &&
+      github.event.issue.state == 'closed' &&
+      github.event.issue.state_reason != 'duplicate' &&
+      startsWith(github.event.comment.body, '/reopen')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Show identities - there is no authorization condition to satisfy
+        env:
+          COMMENTER: ${{ github.event.comment.user.login }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+          STATE: ${{ github.event.issue.state }}
+          STATE_REASON: ${{ github.event.issue.state_reason }}
+        run: |
+          echo "COMMENTER=$COMMENTER"
+          echo "COMMENT_ASSOCIATION=$COMMENT_ASSOCIATION"
+          echo "ISSUE_AUTHOR=$ISSUE_AUTHOR"
+          echo "ISSUE_AUTHOR_ASSOCIATION=$ISSUE_AUTHOR_ASSOCIATION"
+          echo "STATE=$STATE STATE_REASON=$STATE_REASON"
+          echo "job ran for a commenter with no relation to the issue"
+
+      - name: Reopen the issue (mirrors reopen_issue.py)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" -f state=open
+
+      - name: Show raw issue title reaching the notification payload
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          python3 -c 'import json,os;print(json.dumps({"extension":os.environ["ISSUE_TITLE"]}))'
+
+      - name: Confirm the reopen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "PoC: reopened by a commenter with no authorization check"
