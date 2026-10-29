@@ -1,0 +1,20 @@
+name: seed
+on:
+  workflow_dispatch:
+permissions:
+  issues: write
+  contents: read
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create and close an issue as github-actions[bot]
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url=$(gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title '<https://evil.example|Click here for a free Burp licence> demo' \
+            --body 'seed issue, authored by github-actions[bot]')
+          num=${url##*/}
+          gh issue close "$num" --repo "$GITHUB_REPOSITORY" --reason "not planned"
+          echo "SEEDED=$url"
